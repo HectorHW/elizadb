@@ -1,17 +1,24 @@
-use std::{num::NonZeroU64, collections::{HashSet, HashMap, VecDeque}, marker::PhantomData};
-use crate::smallset::{Smallset, EMPTY_SLOT, TOMBSTONE};
 use super::doublemap::DoubleMap;
+use crate::smallset::{Smallset, EMPTY_SLOT, TOMBSTONE};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    marker::PhantomData,
+    num::NonZeroU64,
+};
 
 pub type Key = NonZeroU64;
 
 const _: () = {
-    assert!(std::mem::size_of::<Option<Key>>() == std::mem::size_of::<Key>(), "key must have a nieche");
+    assert!(
+        std::mem::size_of::<Option<Key>>() == std::mem::size_of::<Key>(),
+        "key must have a nieche"
+    );
 };
 
 pub(super) enum IndexLocation {
     /// Offset in number of elements (must be multiplied by size if offsetting into bytes)
     Small(usize),
-    Big
+    Big,
 }
 
 #[derive(Default)]
@@ -22,7 +29,7 @@ pub struct Database<const SMALLSIZE: usize> {
     pub(super) small_keys: Vec<Option<Key>>,
     pub(super) small_storage: Vec<u8>,
     pub(super) storage_type: PhantomData<Smallset<'static, SMALLSIZE>>,
-    pub(super) big_storage: HashMap<Key, HashSet<u8>>
+    pub(super) big_storage: HashMap<Key, HashSet<u8>>,
 }
 
 impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
@@ -32,7 +39,7 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         if end > self.small_storage.len() {
             return None;
         }
-        let slice = &mut self.small_storage[start .. end];
+        let slice = &mut self.small_storage[start..end];
         <&'_ mut [u8; SMALLSIZE]>::try_from(slice).ok()
     }
 
@@ -47,8 +54,8 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         if end > self.small_storage.len() {
             return None;
         }
-        let slice = &self.small_storage[start .. end];
-        <&'_  [u8; SMALLSIZE]>::try_from(slice).ok()
+        let slice = &self.small_storage[start..end];
+        <&'_ [u8; SMALLSIZE]>::try_from(slice).ok()
     }
 
     /// Creates new key, indicates if it was inserted
@@ -62,8 +69,11 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
             let slice = self.get_view_mut(hole).unwrap();
             Smallset::new_empty(slice);
             self.small_keys[hole] = Some(key);
-        }else{
-            self.index.insert(key, IndexLocation::Small(self.small_storage.len() / SMALLSIZE));
+        } else {
+            self.index.insert(
+                key,
+                IndexLocation::Small(self.small_storage.len() / SMALLSIZE),
+            );
             self.small_keys.push(Some(key));
             for _ in 0..SMALLSIZE {
                 self.small_storage.push(EMPTY_SLOT);
@@ -86,32 +96,30 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         Ok(*self.terms.get_forward(term).unwrap())
     }
 
-    /// Add flag to 
+    /// Add flag to
     pub fn set_flag(&mut self, key: Key, term: &str) -> Result<bool, ()> {
         let term_index = self.add_term(term)?;
         self.create_record(key);
-        
+
         match self.index.get(&key).unwrap() {
             &IndexLocation::Small(index) => {
                 let mut small_record = Smallset::reiterpret(self.get_view_mut(index).unwrap());
                 match small_record.insert(term_index) {
-                     Ok(exists) => Ok(exists),
+                    Ok(exists) => Ok(exists),
                     Err(_) => {
                         self.evict_into_large(key);
                         self.set_flag(key, term)
-                    },
+                    }
                 }
             }
-            IndexLocation::Big => {
-                Ok(self.big_storage.entry(key).or_default().insert(term_index))
-            }
+            IndexLocation::Big => Ok(self.big_storage.entry(key).or_default().insert(term_index)),
         }
     }
 
     fn evict_into_large(&mut self, key: Key) {
         let small_index = match self.index.entry(key).or_insert(IndexLocation::Big) {
             IndexLocation::Small(value) => *value,
-            IndexLocation::Big => return
+            IndexLocation::Big => return,
         };
 
         let current_state = *self.get_view_mut(small_index).unwrap();
@@ -120,7 +128,7 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         for item in current_state {
             if item == EMPTY_SLOT || item == TOMBSTONE {
                 continue;
-            } 
+            }
             big_set.insert(item);
         }
         self.index.insert(key, IndexLocation::Big);

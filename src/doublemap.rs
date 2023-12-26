@@ -1,19 +1,28 @@
-use std::{collections::{HashMap, HashSet}, borrow::Borrow};
+use std::{
+    borrow::Borrow,
+    collections::{HashMap, HashSet},
+};
 
 pub struct DoubleMap<K, V> {
     forward: HashMap<K, V>,
-    backward: HashMap<V, K>
+    backward: HashMap<V, K>,
 }
 
 impl<K, V> Default for DoubleMap<K, V> {
     fn default() -> Self {
-        Self { forward: Default::default(), backward: Default::default() }
+        Self {
+            forward: Default::default(),
+            backward: Default::default(),
+        }
     }
 }
 
 impl<K, V> DoubleMap<K, V>
-where K: std::hash::Hash + Eq + Clone, V: std::hash::Hash + Eq + Clone {
-    pub fn new() -> Self{
+where
+    K: std::hash::Hash + Eq + Clone,
+    V: std::hash::Hash + Eq + Clone,
+{
+    pub fn new() -> Self {
         Default::default()
     }
 
@@ -23,14 +32,18 @@ where K: std::hash::Hash + Eq + Clone, V: std::hash::Hash + Eq + Clone {
     }
 
     pub fn get_forward<Q>(&self, key: &Q) -> Option<&V>
-    where K: Borrow<Q>,
-    Q: std::hash::Hash + std::cmp::Eq + ?Sized {
+    where
+        K: Borrow<Q>,
+        Q: std::hash::Hash + std::cmp::Eq + ?Sized,
+    {
         self.forward.get(key)
     }
 
-    pub fn get_backward<Q>(&self, key: &Q) -> Option<&K> 
-    where V: Borrow<Q>,
-    Q: std::hash::Hash + std::cmp::Eq + ?Sized {
+    pub fn get_backward<Q>(&self, key: &Q) -> Option<&K>
+    where
+        V: Borrow<Q>,
+        Q: std::hash::Hash + std::cmp::Eq + ?Sized,
+    {
         self.backward.get(key)
     }
 
@@ -40,7 +53,10 @@ where K: std::hash::Hash + Eq + Clone, V: std::hash::Hash + Eq + Clone {
 }
 
 impl<K, V> TryFrom<HashMap<K, V>> for DoubleMap<K, V>
-where K: std::hash::Hash + std::cmp::Eq + Clone, V: std::hash::Hash + std::cmp::Eq + Clone {
+where
+    K: std::hash::Hash + std::cmp::Eq + Clone,
+    V: std::hash::Hash + std::cmp::Eq + Clone,
+{
     type Error = ();
 
     fn try_from(value: HashMap<K, V>) -> Result<Self, Self::Error> {
@@ -51,7 +67,6 @@ where K: std::hash::Hash + std::cmp::Eq + Clone, V: std::hash::Hash + std::cmp::
                 return Err(());
             }
             result.insert(k, v);
-
         }
 
         Ok(result)

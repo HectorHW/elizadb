@@ -1,11 +1,10 @@
 use storage::{Database, Key};
 
-mod storage;
-mod serde;
-mod smallset;
 mod doublemap;
 mod query;
-
+mod serde;
+mod smallset;
+mod storage;
 
 fn main() {
     let mut database = Database::<8>::default();
