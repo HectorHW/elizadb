@@ -50,6 +50,14 @@ where
     pub fn len(&self) -> usize {
         self.forward.len()
     }
+
+    pub fn lefts(&self) -> impl Iterator<Item = &'_ K> {
+        self.forward.keys()
+    }
+
+    pub fn rights(&self) -> impl Iterator<Item = &'_ V> {
+        self.backward.keys()
+    }
 }
 
 impl<K, V> TryFrom<HashMap<K, V>> for DoubleMap<K, V>

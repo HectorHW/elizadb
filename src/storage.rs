@@ -61,6 +61,10 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         true
     }
 
+    pub fn get_term_id(&self, term: &str) -> Option<u8> {
+        self.terms.get_forward(term).cloned()
+    }
+
     /// Tries to add Term, fails if it exeeds u8 capacity
     pub fn add_term(&mut self, term: &str) -> Result<u8, ()> {
         if let Some(loc) = self.terms.get_forward(term) {
@@ -74,7 +78,14 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         Ok(*self.terms.get_forward(term).unwrap())
     }
 
-    /// Add flag to
+    pub fn list_keys(&self) -> impl Iterator<Item = Key> + '_ {
+        self.big_storage
+            .keys()
+            .cloned()
+            .chain(self.small_keys.iter().filter_map(|item| item.clone()))
+    }
+
+    /// Add boolean flag to key
     pub fn set_flag(&mut self, key: Key, term: &str) -> Result<bool, ()> {
         let term_index = self.add_term(term)?;
         self.create_record(key);

@@ -1,19 +1,20 @@
+use std::sync::{Arc, Mutex};
+
 use storage::{Database, Key};
 
+mod api;
 mod doublemap;
 mod query;
 mod serde;
 mod smallset;
 mod storage;
 
-fn main() {
-    let mut database = Database::<8>::default();
-
-    database.add_term("kms").unwrap();
-    let key = Key::new(1).unwrap();
-    database.create_record(key);
-
-    database.set_flag(key, "kms").unwrap();
-
-    println!("{:?}", database.horizontal_query(&key));
+#[tokio::main]
+async fn main() {
+    let database = Arc::new(Mutex::new(Database::<8>::default()));
+    let router = api::build_router(database);
+    let bind_string = "0.0.0.0:4200";
+    println!("{}", bind_string);
+    let listener = tokio::net::TcpListener::bind(bind_string).await.unwrap();
+    axum::serve(listener, router).await.unwrap();
 }
