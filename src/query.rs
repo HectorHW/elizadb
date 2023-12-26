@@ -13,11 +13,9 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         let location = self.index.get(key)?;
         match location {
             &super::storage::IndexLocation::Small(location) => {
-                let set = self.get_view(location)?;
-                let items = set.iter().cloned().collect::<Vec<_>>();
+                let set = *self.get_smallset(location)?;
                 Some(
-                    items
-                        .into_iter()
+                    set.iter()
                         .filter_map(|item| self.explain_term_id(item))
                         .collect(),
                 )

@@ -1,22 +1,22 @@
 use std::usize;
 
-#[derive(Debug)]
-pub struct Smallset<'data, const SIZE: usize> {
-    backing_storage: &'data mut [u8; SIZE],
+#[derive(Debug, Copy, Clone)]
+pub struct Smallset<const SIZE: usize> {
+    backing_storage: [u8; SIZE],
 }
 
 pub const EMPTY_SLOT: u8 = 0;
 pub const TOMBSTONE: u8 = 0xff;
 
-impl<'data, const SIZE: usize> Smallset<'data, SIZE> {
-    /// Construct a set over backing storage, clearing it in the process
-    pub fn new_empty(backing_storage: &'data mut [u8; SIZE]) -> Self {
-        backing_storage.fill(EMPTY_SLOT);
+impl<const SIZE: usize> Smallset<SIZE> {
+    /// Construct a new set without any elements
+    pub fn new_empty() -> Self {
+        let backing_storage = [0; SIZE];
         Smallset { backing_storage }
     }
 
     /// Construct a set from existing storage. Storage is not changed in any way and MUST come from Smallset
-    pub fn reiterpret(backing_storage: &'data mut [u8; SIZE]) -> Self {
+    pub fn reiterpret(backing_storage: [u8; SIZE]) -> Self {
         Smallset { backing_storage }
     }
 
@@ -143,11 +143,15 @@ impl<'data, const SIZE: usize> Smallset<'data, SIZE> {
     }
 
     /// Clone self into compatible set, getting rid of any tombstones in the process
-    pub fn compact<const OTHERSIZE: usize>(&self, target: &mut Smallset<'_, OTHERSIZE>) {
+    pub fn compact<const OTHERSIZE: usize>(&self, target: &mut Smallset<OTHERSIZE>) {
         target.backing_storage.fill(EMPTY_SLOT);
         for item in self.iter() {
             target.insert(item).unwrap();
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.backing_storage.fill(EMPTY_SLOT);
     }
 }
 
@@ -155,25 +159,24 @@ impl<'data, const SIZE: usize> Smallset<'data, SIZE> {
 mod tests {
     use super::Smallset;
 
+    type Small8 = Smallset<8>;
+
     #[test]
     fn cannot_locate_item_in_empty_set() {
-        let mut data = [0; 8];
-        let set = Smallset::new_empty(&mut data);
+        let set = Small8::new_empty();
         assert!(!set.contains(2))
     }
 
     #[test]
     fn can_locate_item_after_insertion() {
-        let mut data = [0; 8];
-        let mut set = Smallset::new_empty(&mut data);
+        let mut set = Small8::new_empty();
         set.insert(2).unwrap();
         assert!(set.contains(2));
     }
 
     #[test]
     fn can_remove() {
-        let mut data = [0; 8];
-        let mut set = Smallset::new_empty(&mut data);
+        let mut set = Small8::new_empty();
         set.insert(2).unwrap();
         assert!(set.remove(2));
         assert!(!set.contains(2));
@@ -181,8 +184,7 @@ mod tests {
 
     #[test]
     fn collisions_are_resolved() {
-        let mut data = [0; 8];
-        let mut set = Smallset::new_empty(&mut data);
+        let mut set = Small8::new_empty();
         set.insert(2).unwrap();
         set.insert(10).unwrap();
 
@@ -192,8 +194,7 @@ mod tests {
 
     #[test]
     fn tombstones_are_placed_and_items_are_found_after_deletion() {
-        let mut data = [0; 8];
-        let mut set = Smallset::new_empty(&mut data);
+        let mut set = Small8::new_empty();
         set.insert(2).unwrap();
         set.insert(10).unwrap();
         set.remove(2);
