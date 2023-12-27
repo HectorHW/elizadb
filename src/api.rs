@@ -8,7 +8,10 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::storage::{Database, Key};
+use crate::{
+    query::Query,
+    storage::{Database, Key},
+};
 
 type DBState = Arc<Mutex<Database<8>>>;
 
@@ -20,6 +23,7 @@ pub fn build_router(state: DBState) -> axum::Router {
             "/items/:key",
             get(make_horizontal_query).post(add_term_to_key),
         )
+        .route("/query", post(make_vertical_query))
         .with_state(state)
 }
 
@@ -86,5 +90,16 @@ async fn make_horizontal_query(
             Json(items.into_iter().map(String::from).collect()),
         )),
         None => Err((StatusCode::NOT_FOUND, Json("key does not exist"))),
+    }
+}
+
+async fn make_vertical_query(
+    State(db): State<DBState>,
+    Json(query): Json<Query>,
+) -> (StatusCode, Result<Json<Vec<Key>>, Json<String>>) {
+    let db = db.lock().unwrap();
+    match db.vertical_query(&query) {
+        Ok(items) => (StatusCode::OK, Ok(Json(items))),
+        Err(message) => (StatusCode::BAD_REQUEST, Err(Json(message))),
     }
 }
