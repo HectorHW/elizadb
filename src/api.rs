@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use axum::{
     extract::{Path, State},
@@ -7,13 +7,14 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 use crate::{
     query::Query,
     storage::{Database, Key},
 };
 
-type DBState = Arc<Mutex<Database<8>>>;
+type DBState = Arc<RwLock<Database<8>>>;
 
 pub fn build_router(state: DBState) -> axum::Router {
     Router::new()
@@ -33,7 +34,7 @@ async fn create_term(
     State(db): State<DBState>,
     term: Json<String>,
 ) -> Result<(StatusCode, Json<impl Serialize>), (StatusCode, Json<impl Serialize>)> {
-    let mut db = db.lock().unwrap();
+    let mut db = db.write().await;
 
     if db.get_term_id(&term).is_some() {
         return Err((StatusCode::CONFLICT, Json("term already exists")));
@@ -46,12 +47,12 @@ async fn create_term(
 }
 
 async fn list_terms(State(db): State<DBState>) -> Json<Vec<String>> {
-    let db = db.lock().unwrap();
+    let db = db.read().await;
     Json(db.terms.lefts().cloned().collect())
 }
 
 async fn create_item(State(db): State<DBState>, Json(key): Json<Key>) -> StatusCode {
-    let mut db = db.lock().unwrap();
+    let mut db = db.write().await;
     if db.create_record(key) {
         StatusCode::CREATED
     } else {
@@ -63,7 +64,7 @@ async fn allocate_items_bulk(
     State(db): State<DBState>,
     Json(items): Json<Vec<Key>>,
 ) -> Result<StatusCode, (StatusCode, Json<Vec<Key>>)> {
-    let mut db = db.lock().unwrap();
+    let mut db = db.write().await;
     let mut existing_keys = vec![];
     for item in items {
         if !db.create_record(item) {
@@ -78,7 +79,7 @@ async fn allocate_items_bulk(
 }
 
 async fn list_items(State(db): State<DBState>) -> Json<Vec<Key>> {
-    let db = db.lock().unwrap();
+    let db = db.read().await;
 
     Json(db.list_keys().collect())
 }
@@ -88,7 +89,7 @@ async fn add_term_to_key(
     Path(key): Path<Key>,
     Json(term): Json<String>,
 ) -> Result<StatusCode, (StatusCode, Json<&'static str>)> {
-    let mut db = db.lock().unwrap();
+    let mut db = db.write().await;
 
     match db.set_flag(key, &term) {
         Ok(_) => Ok(StatusCode::CREATED),
@@ -106,7 +107,7 @@ struct SetKeysBulk {
 }
 
 async fn set_keys_bulk(State(db): State<DBState>, Json(request): Json<SetKeysBulk>) -> StatusCode {
-    let mut db = db.lock().unwrap();
+    let mut db = db.write().await;
     if db.add_term(&request.term).is_err() {
         return StatusCode::CONFLICT;
     }
@@ -121,7 +122,7 @@ async fn make_horizontal_query(
     State(db): State<DBState>,
     Path(key): Path<Key>,
 ) -> Result<(StatusCode, Json<Vec<String>>), (StatusCode, Json<&'static str>)> {
-    let db = db.lock().unwrap();
+    let db = db.read().await;
     match db.horizontal_query(&key) {
         Some(items) => Ok((
             StatusCode::OK,
@@ -135,7 +136,7 @@ async fn make_vertical_query(
     State(db): State<DBState>,
     Json(query): Json<Query>,
 ) -> (StatusCode, Result<Json<Vec<Key>>, Json<String>>) {
-    let db = db.lock().unwrap();
+    let db = db.read().await;
     match db.vertical_query(&query) {
         Ok(items) => (StatusCode::OK, Ok(Json(items))),
         Err(message) => (StatusCode::BAD_REQUEST, Err(Json(message))),

@@ -1,6 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use storage::{Database, Key};
+use tokio::sync::RwLock;
 
 mod api;
 mod doublemap;
@@ -11,7 +12,7 @@ mod storage;
 
 #[tokio::main]
 async fn main() {
-    let database = Arc::new(Mutex::new(Database::<8>::default()));
+    let database = Arc::new(RwLock::new(Database::<8>::default()));
     let router = api::build_router(database);
     let bind_string = "0.0.0.0:4200";
     println!("{}", bind_string);
