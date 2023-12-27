@@ -50,10 +50,8 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
             self.get_smallset_mut(hole).unwrap().clear();
             self.small_keys[hole] = Some(key);
         } else {
-            self.index.insert(
-                key,
-                IndexLocation::Small(self.small_storage.len() / SMALLSIZE),
-            );
+            self.index
+                .insert(key, IndexLocation::Small(self.small_storage.len()));
             self.small_keys.push(Some(key));
             self.small_storage.push(Smallset::new_empty())
         }
@@ -82,7 +80,7 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         self.big_storage
             .keys()
             .cloned()
-            .chain(self.small_keys.iter().filter_map(|item| item.clone()))
+            .chain(self.small_keys.iter().filter_map(|item| *item))
     }
 
     /// Add boolean flag to key
