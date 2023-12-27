@@ -6,7 +6,7 @@ use axum::{
     routing::{get, post, Router},
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     query::Query,
@@ -24,6 +24,8 @@ pub fn build_router(state: DBState) -> axum::Router {
             get(make_horizontal_query).post(add_term_to_key),
         )
         .route("/query", post(make_vertical_query))
+        .route("/bulk/items", post(allocate_items_bulk))
+        .route("/bulk/keys", post(set_keys_bulk))
         .with_state(state)
 }
 
@@ -57,6 +59,24 @@ async fn create_item(State(db): State<DBState>, Json(key): Json<Key>) -> StatusC
     }
 }
 
+async fn allocate_items_bulk(
+    State(db): State<DBState>,
+    Json(items): Json<Vec<Key>>,
+) -> Result<StatusCode, (StatusCode, Json<Vec<Key>>)> {
+    let mut db = db.lock().unwrap();
+    let mut existing_keys = vec![];
+    for item in items {
+        if !db.create_record(item) {
+            existing_keys.push(item);
+        }
+    }
+    if existing_keys.is_empty() {
+        Ok(StatusCode::CREATED)
+    } else {
+        Err((StatusCode::CONFLICT, Json(existing_keys)))
+    }
+}
+
 async fn list_items(State(db): State<DBState>) -> Json<Vec<Key>> {
     let db = db.lock().unwrap();
 
@@ -77,6 +97,24 @@ async fn add_term_to_key(
             Json("term database is full and cannot take more terms"),
         )),
     }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct SetKeysBulk {
+    term: String,
+    keys: Vec<Key>,
+}
+
+async fn set_keys_bulk(State(db): State<DBState>, Json(request): Json<SetKeysBulk>) -> StatusCode {
+    let mut db = db.lock().unwrap();
+    if db.add_term(&request.term).is_err() {
+        return StatusCode::CONFLICT;
+    }
+    for key in request.keys {
+        db.set_flag(key, &request.term).unwrap();
+    }
+
+    StatusCode::OK
 }
 
 async fn make_horizontal_query(
