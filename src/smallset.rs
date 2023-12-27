@@ -11,7 +11,7 @@ pub const TOMBSTONE: u8 = 0xff;
 impl<const SIZE: usize> Smallset<SIZE> {
     /// Construct a new set without any elements
     pub fn new_empty() -> Self {
-        let backing_storage = [0; SIZE];
+        let backing_storage = [EMPTY_SLOT; SIZE];
         Smallset { backing_storage }
     }
 
