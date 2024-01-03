@@ -12,7 +12,15 @@ mod storage;
 
 #[tokio::main]
 async fn main() {
-    let database = Arc::new(RwLock::new(Database::<8>::default()));
+    let state = match serde::load_possibly_missing(serde::DEFAULT_SAVE_PATH) {
+        Ok(state) => state,
+        Err(e) => {
+            eprintln!("error loading database state: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let database = Arc::new(RwLock::new(state));
     let router = api::build_router(database);
     let bind_string = "0.0.0.0:4200";
     println!("{}", bind_string);

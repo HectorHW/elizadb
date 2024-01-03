@@ -27,6 +27,7 @@ pub fn build_router(state: DBState) -> axum::Router {
         .route("/query", post(make_vertical_query))
         .route("/bulk/items", post(allocate_items_bulk))
         .route("/bulk/keys", post(set_keys_bulk))
+        .route("/service/save", post(save_state))
         .with_state(state)
 }
 
@@ -140,5 +141,13 @@ async fn make_vertical_query(
     match db.vertical_query(&query) {
         Ok(items) => (StatusCode::OK, Ok(Json(items))),
         Err(message) => (StatusCode::BAD_REQUEST, Err(Json(message))),
+    }
+}
+
+async fn save_state(State(db): State<DBState>) -> Result<StatusCode, (StatusCode, Json<String>)> {
+    let db = db.read().await;
+    match crate::serde::two_phase_save(&db, crate::serde::DEFAULT_SAVE_PATH) {
+        Ok(_) => Ok(StatusCode::OK),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(e.to_string()))),
     }
 }

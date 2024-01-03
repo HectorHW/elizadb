@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    io::{Read, Write},
+    io::{BufReader, BufWriter, Read, Write},
 };
 
 use serde::{Deserialize, Serialize};
@@ -87,7 +87,7 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         rmp_serde::encode::write(buffer, &serde)
     }
 
-    pub fn read(buffer: &mut impl Read) -> Result<Self, rmp_serde::decode::Error> {
+    pub fn load(buffer: &mut impl Read) -> Result<Self, rmp_serde::decode::Error> {
         let serde: SerializationScheme<SMALLSIZE> = rmp_serde::decode::from_read(buffer)?;
 
         let terms = serde
@@ -105,6 +105,62 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
             serde.big_storage,
         ))
     }
+}
+
+pub fn two_phase_save<const SMALLSIZE: usize>(
+    state: &Database<SMALLSIZE>,
+    save_path: impl AsRef<std::path::Path>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let final_path = save_path.as_ref();
+    let temp_path = get_temp_filename(final_path);
+
+    write_to_file(state, &temp_path)?;
+
+    std::fs::rename(temp_path, final_path)?;
+
+    Ok(())
+}
+
+fn get_temp_filename(save_path: &std::path::Path) -> std::path::PathBuf {
+    let mut temp_filename = save_path.to_owned();
+    add_extension(&mut temp_filename, "tmp");
+    temp_filename
+}
+
+fn write_to_file<const SMALLSIZE: usize>(
+    state: &Database<SMALLSIZE>,
+    path: impl AsRef<std::path::Path>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut temp_file = BufWriter::new(std::fs::File::create(path.as_ref())?);
+    state.dump(&mut temp_file)?;
+    Ok(())
+}
+
+fn add_extension(path: &mut std::path::PathBuf, extension: impl AsRef<std::path::Path>) {
+    match path.extension() {
+        Some(ext) => {
+            let mut ext = ext.to_os_string();
+            ext.push(".");
+            ext.push(extension.as_ref());
+            path.set_extension(ext)
+        }
+        None => path.set_extension(extension.as_ref()),
+    };
+}
+
+pub static DEFAULT_SAVE_PATH: &str = "state.elizadb";
+
+pub fn load_possibly_missing<const SMALLSIZE: usize>(
+    path: impl AsRef<std::path::Path>,
+) -> Result<Database<SMALLSIZE>, Box<dyn std::error::Error>> {
+    let path = path.as_ref();
+    if !path.exists() {
+        return Ok(Default::default());
+    }
+    let mut input_file = BufReader::new(std::fs::File::open(path)?);
+
+    let state = Database::<SMALLSIZE>::load(&mut input_file)?;
+    Ok(state)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -137,7 +193,7 @@ mod tests {
 
         let mut reader = storage.as_slice();
 
-        let db = Database::<8>::read(&mut reader).unwrap();
+        let db = Database::<8>::load(&mut reader).unwrap();
 
         assert_eq!(
             db.horizontal_query(&key),
