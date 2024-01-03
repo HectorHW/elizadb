@@ -63,7 +63,7 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
         self.terms.get_forward(term).cloned()
     }
 
-    /// Tries to add Term, fails if it exeeds u8 capacity
+    /// Tries to add Term, fails if it exceeds u8 capacity
     pub fn add_term(&mut self, term: &str) -> Result<u8, ()> {
         if let Some(loc) = self.terms.get_forward(term) {
             return Ok(*loc);
