@@ -3,6 +3,27 @@ use std::usize;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
+#[derive(Clone, Copy, Debug)]
+#[repr(transparent)]
+pub(super) struct SmallsetItem(u8);
+
+impl From<SmallsetItem> for u8 {
+    fn from(val: SmallsetItem) -> Self {
+        val.0
+    }
+}
+
+impl TryFrom<u8> for SmallsetItem {
+    type Error = u8;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            EMPTY_SLOT | TOMBSTONE => Err(value),
+            _any_other => Ok(SmallsetItem(value)),
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Smallset<const SIZE: usize> {
     #[serde(with = "BigArray")]
@@ -33,7 +54,8 @@ impl<const SIZE: usize> Smallset<SIZE> {
     }
 
     /// Check if this value is stored in the set
-    pub fn contains(&self, data: u8) -> bool {
+    pub fn contains(&self, data: SmallsetItem) -> bool {
+        let data = data.into();
         let hashcode = Self::hash(data);
         let mut look_position = hashcode;
         let mut attempt = 0;
@@ -89,8 +111,8 @@ impl<const SIZE: usize> Smallset<SIZE> {
     }
 
     /// Insert this value into set and return bool indicating if it is new or error if set is full
-    pub fn insert(&mut self, data: u8) -> Result<bool, u8> {
-        assert!(data != EMPTY_SLOT && data != TOMBSTONE);
+    pub fn insert(&mut self, data: SmallsetItem) -> Result<bool, u8> {
+        let data = data.into();
         let (slot, _) = self.locate_slot_mut(data).ok_or(data)?;
         if *slot == data {
             return Ok(false);
@@ -100,8 +122,8 @@ impl<const SIZE: usize> Smallset<SIZE> {
     }
 
     /// Remove value from set, returning bool if it was here
-    pub fn remove(&mut self, data: u8) -> bool {
-        assert!(data != EMPTY_SLOT && data != TOMBSTONE);
+    pub fn remove(&mut self, data: SmallsetItem) -> bool {
+        let data = data.into();
         let Some((slot, index)) = self.locate_insertion_slot(data) else {
             return false;
         };
@@ -150,7 +172,7 @@ impl<const SIZE: usize> Smallset<SIZE> {
     pub fn compact<const OTHERSIZE: usize>(&self, target: &mut Smallset<OTHERSIZE>) {
         target.backing_storage.fill(EMPTY_SLOT);
         for item in self.iter() {
-            target.insert(item).unwrap();
+            target.insert(item.try_into().unwrap()).unwrap();
         }
     }
 
@@ -165,45 +187,52 @@ mod tests {
 
     type Small8 = Smallset<8>;
 
+    macro_rules! item {
+        ($x: expr) => {
+            $x.try_into().unwrap()
+        };
+    }
+
     #[test]
     fn cannot_locate_item_in_empty_set() {
         let set = Small8::new_empty();
-        assert!(!set.contains(2))
+        assert!(!set.contains(item!(2)))
     }
 
     #[test]
     fn can_locate_item_after_insertion() {
         let mut set = Small8::new_empty();
-        set.insert(2).unwrap();
-        assert!(set.contains(2));
+        set.insert(item!(2)).unwrap();
+        assert!(set.contains(item!(2)));
     }
 
     #[test]
     fn can_remove() {
         let mut set = Small8::new_empty();
-        set.insert(2).unwrap();
-        assert!(set.remove(2));
-        assert!(!set.contains(2));
+        let item = item!(2);
+        set.insert(item).unwrap();
+        assert!(set.remove(item));
+        assert!(!set.contains(item));
     }
 
     #[test]
     fn collisions_are_resolved() {
         let mut set = Small8::new_empty();
-        set.insert(2).unwrap();
-        set.insert(10).unwrap();
+        set.insert(item!(2)).unwrap();
+        set.insert(item!(10)).unwrap();
 
-        assert!(set.contains(2));
-        assert!(set.contains(10));
+        assert!(set.contains(item!(2)));
+        assert!(set.contains(item!(10)));
     }
 
     #[test]
     fn tombstones_are_placed_and_items_are_found_after_deletion() {
         let mut set = Small8::new_empty();
-        set.insert(2).unwrap();
-        set.insert(10).unwrap();
-        set.remove(2);
+        set.insert(item!(2)).unwrap();
+        set.insert(item!(10)).unwrap();
+        set.remove(item!(2));
 
-        assert!(!set.contains(2));
-        assert!(set.contains(10));
+        assert!(!set.contains(item!(2)));
+        assert!(set.contains(item!(10)));
     }
 }

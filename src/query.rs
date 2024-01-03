@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use serde::Deserialize;
 
+use crate::smallset::SmallsetItem;
+
 use super::{Database, Key};
 
 #[derive(Clone, Debug, Deserialize)]
@@ -46,19 +48,21 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
                 let Some(term_id) = self.get_term_id(term) else {
                     return Err(format!("unknown term {}", term));
                 };
-                Ok(self.simple_vertical_query(term_id))
+                Ok(self.simple_vertical_query(term_id.try_into().unwrap()))
             }
             Query::KofN { terms, bound } => {
                 let resolved_terms = terms
                     .iter()
                     .map(|term| self.get_term_id(term).ok_or(term))
-                    .collect::<Result<Vec<u8>, &String>>()?;
+                    .map(|term_idx| term_idx.map(|term| term.try_into().unwrap()))
+                    .collect::<Result<Vec<_>, &String>>()?;
+
                 Ok(self.k_of_n_query(&resolved_terms, *bound))
             }
         }
     }
 
-    fn simple_vertical_query(&self, term_id: u8) -> Vec<Key> {
+    fn simple_vertical_query(&self, term_id: SmallsetItem) -> Vec<Key> {
         self.small_keys
             .iter()
             .zip(self.small_storage.iter())
@@ -73,7 +77,7 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
                 }
             })
             .chain(self.big_storage.iter().filter_map(|(&key, set)| {
-                if set.contains(&term_id) {
+                if set.contains(&term_id.into()) {
                     Some(key)
                 } else {
                     None
@@ -82,7 +86,7 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
             .collect()
     }
 
-    fn k_of_n_query(&self, terms: &[u8], bound: usize) -> Vec<Key> {
+    fn k_of_n_query(&self, terms: &[SmallsetItem], bound: usize) -> Vec<Key> {
         self.small_keys
             .iter()
             .zip(self.small_storage.iter())
@@ -104,7 +108,7 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
             .chain(self.big_storage.iter().filter_map(|(&key, set)| {
                 let mut total = 0;
                 for item in terms {
-                    if set.contains(item) {
+                    if set.contains(&u8::from(*item)) {
                         total += 1;
                     }
                     if total >= bound {

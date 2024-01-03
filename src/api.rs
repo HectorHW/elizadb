@@ -41,7 +41,7 @@ async fn create_term(
     }
 
     match db.add_term(&term) {
-        Ok(new_index) => Ok((StatusCode::CREATED, Json(new_index))),
+        Ok(new_index) => Ok((StatusCode::CREATED, Json(u8::from(new_index)))),
         Err(_) => Err((StatusCode::BAD_REQUEST, Json("term database is full"))),
     }
 }

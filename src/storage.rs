@@ -1,5 +1,5 @@
 use super::doublemap::DoubleMap;
-use crate::smallset::Smallset;
+use crate::smallset::{Smallset, SmallsetItem};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     num::NonZeroU64,
@@ -64,16 +64,17 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
     }
 
     /// Tries to add Term, fails if it exceeds u8 capacity
-    pub fn add_term(&mut self, term: &str) -> Result<u8, ()> {
+    pub fn add_term(&mut self, term: &str) -> Result<SmallsetItem, ()> {
         if let Some(loc) = self.terms.get_forward(term) {
-            return Ok(*loc);
+            return SmallsetItem::try_from(*loc).map_err(|_| ());
         }
-        if self.terms.len() == 253 {
-            return Err(());
-        }
-        let new_index = 1 + self.terms.len();
-        self.terms.insert(term.to_string(), new_index as u8);
-        Ok(*self.terms.get_forward(term).unwrap())
+        let new_index: SmallsetItem = (self.terms.len() as u8)
+            .checked_add(1)
+            .ok_or(())?
+            .try_into()
+            .map_err(|_| ())?;
+        self.terms.insert(term.to_string(), new_index.into());
+        SmallsetItem::try_from(*self.terms.get_forward(term).unwrap()).map_err(|_| ())
     }
 
     pub fn list_keys(&self) -> impl Iterator<Item = Key> + '_ {
@@ -99,7 +100,11 @@ impl<const SMALLSIZE: usize> Database<SMALLSIZE> {
                     }
                 }
             }
-            IndexLocation::Big => Ok(self.big_storage.entry(key).or_default().insert(term_index)),
+            IndexLocation::Big => Ok(self
+                .big_storage
+                .entry(key)
+                .or_default()
+                .insert(term_index.into())),
         }
     }
 
