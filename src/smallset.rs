@@ -1,7 +1,11 @@
 use std::usize;
 
-#[derive(Debug, Copy, Clone)]
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Smallset<const SIZE: usize> {
+    #[serde(with = "BigArray")]
     backing_storage: [u8; SIZE],
 }
 

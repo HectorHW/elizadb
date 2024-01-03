@@ -48,7 +48,7 @@ async fn create_term(
 
 async fn list_terms(State(db): State<DBState>) -> Json<Vec<String>> {
     let db = db.read().await;
-    Json(db.terms.lefts().cloned().collect())
+    Json(db.terms.left_keys().cloned().collect())
 }
 
 async fn create_item(State(db): State<DBState>, Json(key): Json<Key>) -> StatusCode {

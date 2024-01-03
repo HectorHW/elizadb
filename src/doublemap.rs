@@ -51,8 +51,12 @@ where
         self.forward.len()
     }
 
-    pub fn lefts(&self) -> impl Iterator<Item = &'_ K> {
+    pub fn left_keys(&self) -> impl Iterator<Item = &'_ K> {
         self.forward.keys()
+    }
+
+    pub fn left_items(&self) -> impl Iterator<Item = (&'_ K, &'_ V)> {
+        self.forward.iter()
     }
 
     pub fn rights(&self) -> impl Iterator<Item = &'_ V> {
